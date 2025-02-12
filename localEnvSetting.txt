@@ -1,0 +1,12 @@
+export DATABASE_URL="jdbc:postgresql://localhost:5432/xxx"
+export DATABASE_USERNAME="xxx"
+export DATABASE_PASSWORD="xxx"
+
+export COGNITO_CLIENT_ID="xxx"
+export COGNITO_USER_POOL_ID="xxx"
+export COGNITO_ISSUER_URL="xxx"
+
+export AWS_REGION="xxx"
+
+export AWS_S3_BUCKET_NAME="xxx"
+

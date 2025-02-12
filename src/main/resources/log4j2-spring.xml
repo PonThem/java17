@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration monitorInterval="60">
+
+    <!-- logformat -->
+    <Properties>
+        <property name="LOG_PATTERN" value="[BE] [%-5level] %d{yyyy-MM-dd HH:mm:ss.SSS} [%X{user}] [%-4X{httpMethod}] [%X{url}] [%X{ip}] [%X{method}] - %msg%n"/>
+        <property name="SQL_LOG_PATTERN" value="[BE] [%-5level] %d{yyyy-MM-dd HH:mm:ss.SSS} [%X{user}] - %msg%n"/>
+        <property name="ERROR_LOG_PATTERN" value="[BE] [%-5level] %d{yyyy-MM-dd HH:mm:ss.SSS} [%X{user}] - %msg%n"/>
+        <property name="FILE_PATH" value="./logs/valueLabSystem"/>
+    </Properties>
+
+    <!-- Appenders settings -->
+    <appenders>
+        <!-- CONSOLE output -->
+        <console name="ConsoleAppender" target="SYSTEM_OUT">
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+        </console>
+
+        <console name="SQLConsoleAppender" target="SYSTEM_OUT">
+            <PatternLayout pattern="${SQL_LOG_PATTERN}"/>
+        </console>
+
+    </appenders>
+
+    <!-- Loggers settings -->
+    <loggers>
+        <!-- SQL log recoder -->
+        <!-- <Logger name="org.springframework.jdbc.core" level="trace" additivity="false">
+            <appender-ref ref="SQLConsoleAppender"/>
+        </Logger> -->
+
+        <!-- ApplicationMain Logger -->
+        <Logger name="com.valuelab" level="info" additivity="false">
+            <appender-ref ref="ConsoleAppender"/>
+        </Logger>
+
+        <!-- Error Logger -->
+        <Logger name="com.valuelab.error" level="error" additivity="false">
+            <appender-ref ref="ConsoleAppender"/>
+        </Logger>
+
+    </loggers>
+
+</configuration>

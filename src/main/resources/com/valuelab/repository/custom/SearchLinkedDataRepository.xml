@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.valuelab.repository.custom.SearchLinkedDataRepository">
+    <select id="findSubjectDataAll" resultType="map">
+        with tcs1 as (
+			select
+				distinct standard_subject_name,
+                subject_classification_cd
+			from
+				trn_customer_settlement
+			where
+				settlement_pk in
+					<foreach item="settlementPk" index="index" collection="settlementPkList" open="(" separator="," close=")">
+						#{settlementPk}
+					</foreach>
+			and is_deleted = false
+		),
+        <foreach item="tcs" index="i" collection="tcsList">
+			<foreach item="settlementPk" index="j" collection="settlementPkList">
+                <if test="i == j">
+                    ${tcs} as (
+						select
+							customer_settlement_pk,
+							standard_subject_name,
+							subject_name,
+							statement_type_cd,
+							subject_classification_cd,
+							amounts,
+                            updated_datetime,
+							display_order,
+							row_number() over (partition by standard_subject_name, subject_classification_cd order by customer_settlement_pk) as rn
+						from
+							trn_customer_settlement
+						where
+							settlement_pk = #{settlementPk}
+							and is_deleted = false
+					),
+                </if>
+            </foreach>
+        </foreach>
+        combined as (
+            select
+                <foreach item="t" index="k" collection="tList">
+                    ${t}.rn as ${t}rn,
+                </foreach>
+                <foreach item="t" index="k" collection="tList">
+                    <if test="k == 0">
+                        t1.standard_subject_name,
+                    </if>
+                    <if test="k != 0">
+                        <foreach item="tcs" index="i" collection="tcsList">
+                            <if test="k-1 == i">
+                                ${t}.customer_settlement_pk as ${tcs}_pk,
+						        ${t}.standard_subject_name as ${tcs}_standard_subject,
+						        ${t}.subject_name as ${tcs}_subject,
+						        ${t}.statement_type_cd as ${tcs}_statement_type_cd,
+						        ${t}.subject_classification_cd as ${tcs}_subject_classification_cd,
+						        ${t}.amounts as ${tcs}_amounts,
+                                ${t}.updated_datetime as ${tcs}_updated_datetime,
+                                <if test="k != tList.size()-1 and i != tcsList.size()-1">
+							        ${t}.display_order as ${tcs}_display_order,
+						        </if>
+                                <if test="k == tList.size()-1 and i == tcsList.size()-1">
+							        ${t}.display_order as ${tcs}_display_order
+						        </if>
+                            </if>
+                        </foreach>
+                    </if>
+                </foreach>
+            from(
+				select
+					standard_subject_name,
+                    subject_classification_cd,
+					row_number() over (partition by standard_subject_name order by standard_subject_name) as rn
+				from
+					tcs1
+			) t1
+            <foreach item="t" index="k" collection="tList">
+                <if test="k == 1">
+                    full outer join tcs2 t2 on t1.standard_subject_name = t2.standard_subject_name
+                    and coalesce(t1.subject_classification_cd) = t2.subject_classification_cd
+                    and t1.rn = t2.rn
+                </if>
+                <if test="k != 0 and k != 1  and tList.size()!=2">
+                    <foreach item="tcs" index="i" collection="tcsList">
+                        <if test="k-1 == i">
+                            full outer join ${tcs} ${t} on coalesce(
+                                <foreach item="tb" index="kb" collection="tList">
+                                    <if test="kb&lt;k and kb==0">
+                                        ${tb}.standard_subject_name
+                                    </if>
+                                    <if test="kb&lt;k and kb!=0">
+                                        ,${tb}.standard_subject_name
+                                    </if>
+                                </foreach>
+                            )= ${t}.standard_subject_name
+                            and  coalesce(
+                                <foreach item="tb" index="kb" collection="tList">
+                                    <if test="kb&lt;k and kb==0">
+                                        ${tb}.subject_classification_cd
+                                    </if>
+                                    <if test="kb&lt;k and kb!=0">
+							            ,${tb}.subject_classification_cd
+                                    </if>
+                                </foreach>
+                            ) = ${t}.subject_classification_cd
+                            and coalesce(
+                                <foreach item="tb" index="kb" collection="tList">
+                                    <if test="kb&lt;k and kb==0">
+                                        ${tb}.rn
+                                    </if>
+                                    <if test="kb&lt;k and kb!=0">
+							            ,${tb}.rn
+                                     </if>
+                                </foreach>
+						    ) = ${t}.rn
+                        </if>
+                    </foreach>
+                </if>
+            </foreach>
+        )
+        select
+            *
+        from(
+            select
+                distinct on
+                (standard_subject_name, coalesce(
+                    <foreach item="tcs" index="i" collection="tcsList">
+                        <if test="i==0">
+                            ${tcs}_pk
+                        </if>
+                        <if test="i!=0">
+                            ,${tcs}_pk
+                        </if>
+                    </foreach>
+                ))
+                <foreach item="t" index="k" collection="tList">
+                    <if test="k==0">
+                        ${t}rn
+                    </if>
+                    <if test="k!=0">
+                        ,${t}rn
+                    </if>
+                </foreach>
+                <foreach item="tcs" index="i" collection="tcsList">
+                    ,${tcs}_pk
+                    ,${tcs}_standard_subject
+                    ,${tcs}_subject
+                    ,${tcs}_statement_type_cd
+                    ,${tcs}_subject_classification_cd
+                    ,${tcs}_amounts
+                    ,${tcs}_updated_datetime
+                    ,${tcs}_display_order
+                </foreach>
+            from
+                combined
+            order by
+                standard_subject_name,
+                coalesce(
+                    <foreach item="tcs" index="i" collection="tcsList">
+                        <if test="i==0">
+                            ${tcs}_pk
+                        </if>
+                        <if test="i!=0">
+                            ,${tcs}_pk
+                        </if>
+                    </foreach>
+                )
+        ) tcs0
+        where
+            <foreach item="tcs" index="i" collection="tcsList">
+                <if test="i==0">
+                    ${tcs}_pk is not null
+                </if>
+                <if test="i!=0">
+                    or ${tcs}_pk is not null
+                </if>
+            </foreach>
+        order by
+            <if test="isSearchLinkedDataAPI">
+                coalesce(
+                    <foreach item="converseTcs" index="n" collection="converseTcsList">
+                        <if test="n==0">
+                            ${converseTcs}_statement_type_cd
+                        </if>
+                        <if test="n!=0">
+                            ,${converseTcs}_statement_type_cd
+                        </if>
+                    </foreach>
+                )
+                ,coalesce(
+                    <foreach item="converseTcs" index="n" collection="converseTcsList">
+                        <if test="n==0">
+                            ${converseTcs}_subject_classification_cd
+                        </if>
+                        <if test="n!=0">
+                            ,${converseTcs}_subject_classification_cd
+                        </if>
+                    </foreach>
+                )
+                ,coalesce(
+                    <foreach item="converseTcs" index="n" collection="converseTcsList">
+                        <if test="n==0">
+                            lpad(
+                                cast(${converseTcs}_display_order as text) , 10 , '0'
+                            )
+                        </if>
+                        <if test="n!=0">
+                            ,lpad(
+                                cast(${converseTcs}_display_order as text) , 10 , '0'
+                            )
+                        </if>
+                    </foreach>
+                )
+                <if test="converseTcsList.size() != 1">
+                    <foreach item="converseTcs" index="n" collection="converseTcsList">
+                        <if test="n!=converseTcsList.size()-1">
+                            ,coalesce(
+                                <foreach item="converseTcsb" index="m" collection="converseTcsList">
+                                    <if test="m &lt; converseTcsList.size()-1-n">
+                                        <if test="m != converseTcsList.size()-1-n-1">
+                                        ${converseTcsb}_statement_type_cd,
+                                        </if>
+                                        <if test="m == converseTcsList.size()-1-n-1">
+                                            ${converseTcsb}_statement_type_cd
+                                        </if>
+                                    </if>
+                                </foreach>
+                            )
+                            ,coalesce(
+                                <foreach item="converseTcsb" index="m" collection="converseTcsList">
+                                    <if test="m &lt; converseTcsList.size()-1-n">
+                                        <if test="m != converseTcsList.size()-1-n-1">
+                                            ${converseTcsb}_subject_classification_cd,
+                                        </if>
+                                        <if test="m == converseTcsList.size()-1-n-1">
+                                            ${converseTcsb}_subject_classification_cd
+                                        </if>
+                                    </if>
+                                </foreach>
+                            )
+                            ,coalesce(
+                                <foreach item="converseTcsb" index="m" collection="converseTcsList">
+                                    <if test="m &lt; converseTcsList.size()-1-n">
+                                        <if test="m != converseTcsList.size()-1-n-1">
+                                            lpad(cast(${converseTcsb}_display_order as text) , 10 , '0'),
+                                        </if>
+                                        <if test="m == converseTcsList.size()-1-n-1">
+                                            lpad(cast(${converseTcsb}_display_order as text) , 10 , '0')
+                                        </if>
+                                    </if>
+                                </foreach>
+                            )
+                        </if>
+                    </foreach>
+                </if>
+            </if>
+            <if test="!isSearchLinkedDataAPI">
+                coalesce(
+                    <foreach item="tcs" index="i" collection="tcsList">
+                        <if test="i==0">
+                            ${tcs}_statement_type_cd
+                        </if>
+                        <if test="i!=0">
+                            ,${tcs}_statement_type_cd
+                        </if>
+                    </foreach>
+                )
+                ,coalesce(
+                    <foreach item="tcs" index="i" collection="tcsList">
+                        <if test="i==0">
+                            ${tcs}_subject_classification_cd
+                        </if>
+                        <if test="i!=0">
+                            ,${tcs}_subject_classification_cd
+                        </if>
+                    </foreach>
+                )
+                ,coalesce(
+                    <foreach item="tcs" index="i" collection="tcsList">
+                        <if test="i==0">
+                            lpad(
+                                cast(${tcs}_display_order as text) , 10 , '0'
+                            )
+                        </if>
+                        <if test="i!=0">
+                            ,lpad(
+                                cast(${tcs}_display_order as text) , 10 , '0'
+                            )
+                        </if>
+                    </foreach>
+                )
+                <if test="tcsList.size() != 1">
+                    <foreach item="tcs" index="i" collection="tcsList">
+                        <if test="i!=tcsList.size()-1">
+                            ,coalesce(
+                                <foreach item="tcsb" index="p" collection="tcsList">
+                                    <if test="p &lt; tcsList.size()-1-i">
+                                        <if test="p != tcsList.size()-1-i-1">
+                                            ${tcsb}_statement_type_cd,
+                                        </if>
+                                        <if test="p == tcsList.size()-1-i-1">
+                                            ${tcsb}_statement_type_cd
+                                        </if>
+                                    </if>
+                                </foreach>
+                            )
+                            ,coalesce(
+                                <foreach item="tcsb" index="p" collection="tcsList">
+                                    <if test="p &lt; tcsList.size()-1-i">
+                                        <if test="p != tcsList.size()-1-i-1">
+                                            ${tcsb}_subject_classification_cd,
+                                        </if>
+                                        <if test="p == tcsList.size()-1-i-1">
+                                            ${tcsb}_subject_classification_cd
+                                        </if>
+                                    </if>
+                                </foreach>
+                            )
+                            ,coalesce(
+                                <foreach item="tcsb" index="p" collection="tcsList">
+                                    <if test="p &lt; tcsList.size()-1-i">
+                                        <if test="p != tcsList.size()-1-i-1">
+                                            lpad(cast(${tcsb}_display_order as text) , 10 , '0'),
+                                        </if>
+                                        <if test="p == tcsList.size()-1-i-1">
+                                            lpad(cast(${tcsb}_display_order as text) , 10 , '0')
+                                        </if>
+                                    </if>
+                                </foreach>
+                            )
+                        </if>
+                    </foreach>
+                </if>
+            </if>
+    </select>
+</mapper>
